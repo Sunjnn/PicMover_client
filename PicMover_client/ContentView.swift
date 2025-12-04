@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var _scanStatus: String = "Scanning LAN..."
 
     var body: some View {
-        NavigationView { // 添加导航容器
+        NavigationView {
             VStack {
                 Text("PicMover server in LAN")
                     .font(.headline)
@@ -24,10 +24,9 @@ struct ContentView: View {
                     .padding()
 
                 List(_serverMetas, id: \.host) { meta in
-                    // 点击可跳转到详情页
                     NavigationLink(destination: ServerDetailView(meta: meta)) {
                         Text("Server Name: \(meta.name)\nIP: \(meta.host)")
-                            .foregroundColor(.blue) // 给它一个蓝色，看起来像链接
+                            .foregroundColor(.blue)
                     }
                 }
             }
@@ -40,7 +39,7 @@ struct ContentView: View {
 
     func scanLANForServer() {
         let possibleIPs = ["127.0.0.1"]
-//        serverFoundIPs = possibleIPs
+        //        serverFoundIPs = possibleIPs
 
         let group = DispatchGroup()
         var found = [ServerMeta]()
@@ -58,29 +57,31 @@ struct ContentView: View {
 
             URLSession.shared.dataTask(with: request) { data, response, _ in
                 if let httpResponse = response as? HTTPURLResponse,
-                   (200..<400).contains(httpResponse.statusCode) {
-                    
+                    (200..<400).contains(httpResponse.statusCode)
+                {
+
                     guard let data = data else {
                         return
                     }
-                    
+
                     var jsonObject: Any
                     do {
-                        jsonObject = try JSONSerialization.jsonObject(with: data)
-                    }
-                    catch {
+                        jsonObject = try JSONSerialization.jsonObject(
+                            with: data
+                        )
+                    } catch {
                         return
                     }
-                    
+
                     guard let dict = jsonObject as? [String: Any] else {
                         return
                     }
-                    
+
                     guard let name = dict["Name"] as? String else {
                         print("No 'Name' in \(dict)")
                         return
                     }
-                    
+
                     DispatchQueue.main.async {
                         let meta = ServerMeta(host: ip, name: name)
                         found.append(meta)
