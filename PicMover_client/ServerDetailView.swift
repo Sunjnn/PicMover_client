@@ -31,6 +31,10 @@ struct ServerDetailView: View {
                 .font(.headline)
                 .padding()
             
+            if FailedPhotoManager.shared.count() > 0 {
+                Toggle("Backup failed photos", isOn: $_isBackupFailedPhotos).padding()
+            }
+            
             Spacer()
             
             Text(_statusDescription)
@@ -79,7 +83,7 @@ struct ServerDetailView: View {
     
     @State private var _status: ClientStatus = ClientStatus.INIT
     @State private var _statusDescription: String = ""
-    @State private var _failedLocalIdentifier: [String] = []
+    @State private var _isBackupFailedPhotos: Bool = false
     
     private var _meta: ServerMeta
     
@@ -93,7 +97,16 @@ struct ServerDetailView: View {
                 return;
             }
             
-            await upload_photos(connectId: connectId)
+            var photos: [PHAsset] = []
+            if _isBackupFailedPhotos {
+                let identifiers = FailedPhotoManager.shared.getAllIdentifiers()
+                photos = get_photos(identifiers: identifiers)
+            }
+            else {
+                photos = get_photos()
+            }
+            
+            await upload_photos(connectId: connectId, assets: photos)
             
             if _status != ClientStatus.ERROR {
                 DispatchQueue.main.async {
@@ -179,10 +192,9 @@ struct ServerDetailView: View {
         }
     }
     
-    func upload_photos(connectId: Int) async {
+    func get_photos() -> [PHAsset] {
         DispatchQueue.main.async {
-            _statusDescription = "Uploading photos..."
-            _status = ClientStatus.UPLOADING
+            _statusDescription = "Fetching photos..."
         }
         
         let fetchOptions = PHFetchOptions()
@@ -198,6 +210,24 @@ struct ServerDetailView: View {
         var assets: [PHAsset] = []
         fetchResult.enumerateObjects { asset, _, _ in
             assets.append(asset)
+        }
+        
+        return assets
+    }
+    
+    func get_photos(identifiers: [String]) -> [PHAsset] {
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: identifiers, options: nil)
+        var assets: [PHAsset] = []
+        fetchResult.enumerateObjects { asset, _, _ in
+            assets.append(asset)
+        }
+        return assets
+    }
+    
+    func upload_photos(connectId: Int, assets: [PHAsset]) async {
+        DispatchQueue.main.async {
+            _statusDescription = "Uploading photos..."
+            _status = ClientStatus.UPLOADING
         }
         
         let batchSize = 100
@@ -254,7 +284,7 @@ struct ServerDetailView: View {
                 }
 
                 for index in result {
-                    _failedLocalIdentifier.append(assets[index].localIdentifier)
+                    FailedPhotoManager.shared.add(localIdentifier: assets[index].localIdentifier)
                 }
                 return true
             }
@@ -275,7 +305,7 @@ struct ServerDetailView: View {
         for asset in assets {
             let resource = PHAssetResource.assetResources(for: asset)
             guard let resource = resource.first else {
-                _failedLocalIdentifier.append(asset.localIdentifier)
+                FailedPhotoManager.shared.add(localIdentifier: asset.localIdentifier)
                 continue
             }
             let fileName: String = resource.originalFilename
@@ -305,7 +335,7 @@ struct ServerDetailView: View {
                         "Content": dataBase64,
                     ])
                 } else {
-                    _failedLocalIdentifier.append(asset.localIdentifier)
+                    FailedPhotoManager.shared.add(localIdentifier: asset.localIdentifier)
                 }
             }
         }
